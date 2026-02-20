@@ -42,7 +42,7 @@
     (1 "Magic is about to come...")
     (2 "Magic is in the air!")
     (3 "Magic is somewhere else.")
-    (4 "Magic needs you to believe in.")
+    (4 "Magic needs you to believe in it.")
     (5 "Magic doesn't exist.")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -139,8 +139,7 @@
          (t
           (let ((*answer* (list :code ,code)))
             (multiple-value-prog1 ,@body
-              ;; TODO: use a proper queue instead of a O(n²) nconcf.
-              (a:nconcf (getf *expectation* :response) *answer*))))))
+              (setf *expectation* (list* :answer *answer* *expectation*)))))))
 
 (defgeneric add-to-expectation (key data expectation)
   (:method ((key (eql :basic-authorization)) data expectation)
@@ -174,7 +173,7 @@
       (setf (getf expectation :body) value)
       expectation)))
 
-(defgeneric add-to-response (key data expectation)
+(defgeneric add-to-answer (key data expectation)
   (:method ((key (eql :header)) data expectation)
     (destructuring-bind (header value) data
       (a:when-let ((actual (a:assoc-value (getf expectation :headers) key :test #'equal)))
@@ -199,11 +198,9 @@
 
 (defmacro with (key &rest data)
   `(cond ((boundp '*answer*)
-          (setf *answer*
-                (add-to-response ,key (list ,@data) *answer*)))
+          (setf *answer* (add-to-answer ,key (list ,@data) *answer*)))
          ((boundp '*expectation*)
-          (setf *expectation*
-                (add-to-expectation ,key (list ,@data) *expectation*)))
+          (setf *expectation* (add-to-expectation ,key (list ,@data) *expectation*)))
          (t
           (error "The Great Rouclere has no context of the WITH!"))))
 
@@ -225,22 +222,22 @@
   (:method ((key (eql :times)) value request)
     ;; Virtual match, handled in ACCEPTOR-DISPATCH-REQUEST.
     t)
-  (:method ((key (eql :response)) value request)
+  (:method ((key (eql :answer)) value request)
     ;; Virtual match, handled in MATCH-EXPECTATION.
     t))
 
 (defun match-expectation (request expectation)
-  (loop with response = nil
+  (loop with answer = nil
         for (key value) on expectation by #'cddr
-        when (eq key :response)
-          do (setf response (if (functionp value)
-                                (funcall value request)
-                                value))
+        when (eq key :answer)
+          do (setf answer (if (functionp value)
+                              (funcall value request)
+                              value))
         always (match key value request)
-        finally (return (or response t))))
+        finally (return (or answer t))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Response construction
+;;; Answer construction
 
 (defgeneric respond (key value request)
   (:method :around (key (value function) request)
@@ -251,12 +248,12 @@
     (loop for (expected-header . expected-value) in value
           do (setf (h:header-out expected-header) expected-value)))
   (:method ((key (eql :body)) value request)
-    ;; Virtual call, handled in CREATE-RESPONSE.
+    ;; Virtual call, handled in CREATE-ANSWER.
     ))
 
-(defun create-response (request response)
+(defun create-answer (request answer)
   (loop with body = nil
-        for (key value) on response by #'cddr
+        for (key value) on answer by #'cddr
         when (eq key :body)
           ;; TODO do we even use that? is it even usable?
           do (setf body (if (functionp value)
@@ -276,10 +273,7 @@
   (terpri stream)
   (when data (format stream "~A~%~%" data)))
 
-(defvar *request*)
-
 (defmethod h:acceptor-dispatch-request ((acceptor magic-acceptor) request)
-  (setf *request* request)
   (flet ((fail ()
            (push (list request (copy-tree (expectations))) (surprises acceptor))
            (setf (h:return-code*) 555
@@ -301,5 +295,5 @@
                         (when (= 0 (decf (getf expectation :times)))
                           (a:deletef (expectations) expectation :count 1))))
                  (return (when (consp match)
-                           (create-response request match)))
+                           (create-answer request match)))
             finally (fail)))))
