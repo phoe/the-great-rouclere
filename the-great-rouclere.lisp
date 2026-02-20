@@ -142,15 +142,6 @@
               (setf *expectation* (list* :answer *answer* *expectation*)))))))
 
 (defgeneric add-to-expectation (key data expectation)
-  (:method ((key (eql :basic-authorization)) data expectation)
-    (destructuring-bind (username password) data
-      (a:when-let ((actual (a:assoc-value (getf expectation :headers) "Authorization"
-                                          :test #'equal)))
-        (error "The Great Rouclere will already expect header ~S as ~S!"
-               "Authorization" actual))
-      (let ((value (base64-encode (format nil "~A:~A" username password))))
-        (push (cons "Authorization" (format nil "Basic ~A" value)) (getf expectation :headers)))
-      expectation))
   (:method ((key (eql :header)) data expectation)
     (destructuring-bind (header value) data
       (a:when-let ((actual (a:assoc-value (getf expectation :headers) key :test #'equal)))
@@ -158,14 +149,12 @@
                key actual))
       (push (cons header value) (getf expectation :headers))
       expectation))
+  (:method ((key (eql :basic-authorization)) data expectation)
+    (destructuring-bind (username password) data
+      (let ((value (base64-encode (format nil "~A:~A" username password))))
+        (add-to-expectation :header (list "Authorization" value) expectation))))
   (:method ((key (eql :accept)) data expectation)
-    (destructuring-bind (value) data
-      (a:when-let ((actual (a:assoc-value (getf expectation :headers) "Accept"
-                                          :test #'equal)))
-        (error "The Great Rouclere will already expect header ~S as ~S!"
-               "Accept" actual))
-      (push (cons "Accept" value) (getf expectation :headers))
-      expectation))
+    (add-to-expectation :header (cons "Accept" data) expectation))
   (:method ((key (eql :body)) data expectation)
     (destructuring-bind (value) data
       (a:when-let ((actual (getf expectation :body)))
