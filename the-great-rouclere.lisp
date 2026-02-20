@@ -1,7 +1,8 @@
 (uiop:define-package #:the-great-rouclere
   (:use #:cl)
   (:local-nicknames (#:a #:alexandria-2)
-                    (#:h #:hunchentoot))
+                    (#:h #:hunchentoot)
+                    (#:s #:split-sequence))
   (:export #:with-magic #:expect #:with #:answer
            #:expectations))
 
@@ -19,7 +20,8 @@
 (defmethod h:acceptor-log-access ((acceptor magic-acceptor) &key &allow-other-keys))
 
 (defmethod h:acceptor-log-message ((acceptor magic-acceptor) level control &rest args)
-  (declare (ignore args)))
+  (declare (ignore args))
+  (call-next-method))
 
 (defmethod h:acceptor-status-message ((acceptor magic-acceptor) code &key)
   (if (= 2 (truncate code 100))
@@ -82,7 +84,22 @@
      (a:nconcf (expectations) (list (list :method ,method :url ,url :times ,times)))
      ,@body))
 
+(defun base64-decode (string)
+  (babel:octets-to-string
+   (base64:base64-stream-to-usb8-array string)
+   :encoding (babel:make-external-format :utf-8)))
+
+(defun base64-encode (string)
+  (base64:usb8-array-to-base64-string
+   (babel:string-to-octets string :encoding (babel:make-external-format :utf-8))))
+
+;; TODO move expectation to be the third arg
 (defgeneric add-to-expectation (expectation key data)
+  (:method (expectation (key (eql :basic-authorization)) data)
+    (destructuring-bind (username password) data
+      (let ((value (base64-encode (format nil "~A:~A" username password))))
+        (push (cons "Authorization" (format nil "Basic ~A" value)) (getf expectation :headers)))
+      expectation))
   (:method (expectation (key (eql :header)) data)
     (destructuring-bind (header value) data
       (push (cons header value) (getf expectation :headers))
@@ -90,6 +107,10 @@
   (:method (expectation (key (eql :accept)) data)
     (destructuring-bind (value) data
       (push (cons "Accept" value) (getf expectation :headers))
+      expectation))
+  (:method (expectation (key (eql :body)) data)
+    (destructuring-bind (value) data
+      (setf (getf expectation :body) value)
       expectation)))
 
 (defgeneric add-to-response (expectation key data)
@@ -109,9 +130,9 @@
 (defmacro with (key &rest data)
   `(if (getf (a:lastcar (expectations)) :response)
        (setf (getf (a:lastcar (expectations)) :response)
-             (add-to-response (getf (a:lastcar (expectations)) :response) ,key ',data))
+             (add-to-response (getf (a:lastcar (expectations)) :response) ,key (list ,@data)))
        (setf (a:lastcar (expectations))
-             (add-to-expectation (a:lastcar (expectations)) ,key ',data))))
+             (add-to-expectation (a:lastcar (expectations)) ,key (list ,@data)))))
 
 (defmacro answer ((code) &body body)
   `(if (getf (a:lastcar (expectations)) :response)
@@ -132,7 +153,8 @@
   (:method ((key (eql :url)) value request)
     (string= value (h:request-uri request)))
   (:method ((key (eql :body)) value request)
-    (string= value (h:request-uri request)))
+    (string= value (babel:octets-to-string (h:raw-post-data :request request)
+                                           :encoding (babel:make-external-format :utf-8))))
   (:method ((key (eql :headers)) value request)
     (loop for (expected-header . expected-value) in value
           always (string= expected-value (h:header-in expected-header request))))
@@ -180,8 +202,13 @@
 (defmethod h:acceptor-dispatch-request ((acceptor magic-acceptor) request)
   (flet ((fail ()
            (setf (h:return-code*) 555)
+           (setf (h:content-type*) "text/plain")
            (h:abort-request-handler
-            "The Great Rouclere is surprised by this request!")))
+            ;; TODO solve \n
+            ;; TODO signal an error in the testing thread, somehow?
+            (format nil "The Great Rouclere is surprised by this request!~%~A"
+                    (when (h:raw-post-data)
+                      (babel:octets-to-string (h:raw-post-data)))))))
     (loop with *magic* = acceptor
           for expectation in (expectations)
           for match = (match-expectation request expectation)
