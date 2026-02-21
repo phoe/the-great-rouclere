@@ -230,6 +230,7 @@
 ;;; Expectation matching
 
 (defgeneric match (key value request)
+  ;; TODO ignore the request everywhere, use star variants of functions
   (:method :around (key (value function) request)
     (call-next-method key (funcall value request) request))
   (:method ((key (eql :method)) value request)
