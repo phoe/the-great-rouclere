@@ -148,7 +148,7 @@
   (:method ((key (eql :basic-authorization)) data expectation)
     (destructuring-bind (username password) data
       (let ((value (base64-encode (format nil "~A:~A" username password))))
-        (add-to-expectation :header (list "Authorization" value) expectation))))
+        (add-to-expectation :header (list "Authorization" (format nil "Basic ~A" value)) expectation))))
   (:method ((key (eql :accept)) data expectation)
     (add-to-expectation :header (cons "Accept" data) expectation))
   (:method ((key (eql :body)) data expectation)
