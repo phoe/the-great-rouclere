@@ -45,21 +45,6 @@
     (5 "Magic doesn't exist.")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Queue
-
-;;; Implementing Queues in Lisp, Norvig, Waters, 1991. Figure 4.
-;;; TODO actually use them.
-
-#+(or) #+(or) #+(or) #+(or) #+(or) #+(or)
-(defun make-queue () (let ((q (list nil))) (cons q q)))
-(defun queue-elements (q) (cdar q))
-
-(defun empty-queue-p (q) (null (cdar q)))
-(defun queue-front (q) (cadar q))
-(defun dequeue (q) (car (setf (car q) (cdar q))))
-(defun enqueue (q item) (setf (cdr q) (setf (cddr q) (list item))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Core
 
 (defparameter *expectations* (make-hash-table))
@@ -225,9 +210,7 @@
   (loop with answer = nil
         for (key value) on expectation by #'cddr
         when (eq key :answer)
-          do (setf answer (if (functionp value)
-                              (funcall value request)
-                              value))
+          do (setf answer value)
         always (match key value request)
         finally (return (or answer t))))
 
@@ -250,10 +233,7 @@
   (loop with body = nil
         for (key value) on answer by #'cddr
         when (eq key :body)
-          ;; TODO do we even use that? is it even usable?
-          do (setf body (if (functionp value)
-                            (funcall value)
-                            value))
+          do (setf body value)
         do (respond key value request)
         finally (return body)))
 
