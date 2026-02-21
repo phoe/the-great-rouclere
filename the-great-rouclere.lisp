@@ -165,27 +165,27 @@
       (setf (getf expectation :body) value)
       expectation)))
 
-(defgeneric add-to-answer (key data expectation)
-  (:method ((key (eql :header)) data expectation)
+(defgeneric add-to-answer (key data answer)
+  (:method ((key (eql :header)) data answer)
     (destructuring-bind (header value) data
-      (a:when-let ((actual (a:assoc-value (getf expectation :headers) key :test #'equal)))
+      (a:when-let ((actual (a:assoc-value (getf answer :headers) key :test #'equal)))
         (error "The Great Rouclere will already respond with header ~S as ~S!"
                key actual))
-      (push (cons header value) (getf expectation :headers))
-      expectation))
-  (:method ((key (eql :content-type)) data expectation)
+      (push (cons header value) (getf answer :headers))
+      answer))
+  (:method ((key (eql :content-type)) data answer)
     (destructuring-bind (value) data
-      (add-to-answer :header (list "Content-Type" value) expectation)))
-  (:method ((key (eql :side-effects)) data expectation)
+      (add-to-answer :header (list "Content-Type" value) answer)))
+  (:method ((key (eql :side-effects)) data answer)
     (destructuring-bind (function) data
-      (push function (getf expectation :side-effects))
-      expectation))
-  (:method ((key (eql :body)) data expectation)
+      (push function (getf answer :side-effects))
+      answer))
+  (:method ((key (eql :body)) data answer)
     (destructuring-bind (value) data
-      (a:when-let ((actual (getf expectation :body)))
+      (a:when-let ((actual (getf answer :body)))
         (error "The Great Rouclere will already respond with body ~S!" actual))
-      (setf (getf expectation :body) value)
-      expectation)))
+      (setf (getf answer :body) value)
+      answer)))
 
 (defmacro with (key &rest data)
   `(cond ((boundp '*answer*)
