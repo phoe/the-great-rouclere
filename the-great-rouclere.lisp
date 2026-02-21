@@ -62,29 +62,15 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Core
 
-(defvar *port*)
-
 (defparameter *expectations* (make-hash-table))
-
-(defun expectations (port)
-  (gethash port *expectations*))
-
-(defun (setf expectations) (newval port)
-  (setf (gethash port *expectations*) newval))
-
-(defun delete-expectations (port)
-  (remhash port *expectations*))
+(defun expectations (port) (gethash port *expectations*))
+(defun (setf expectations) (newval port) (setf (gethash port *expectations*) newval))
+(defun delete-expectations (port) (remhash port *expectations*))
 
 (defparameter *surprises* (make-hash-table))
-
-(defun surprises (port)
-  (gethash port *surprises*))
-
-(defun (setf surprises) (newval port)
-  (setf (gethash port *surprises*) newval))
-
-(defun delete-surprises (port)
-  (remhash port *surprises*))
+(defun surprises (port) (gethash port *surprises*))
+(defun (setf surprises) (newval port) (setf (gethash port *surprises*) newval))
+(defun delete-surprises (port) (remhash port *surprises*))
 
 (defun report-magic-failures (failures on-failure report-string &optional (stream *debug-io*))
   (when failures
@@ -124,6 +110,14 @@
     (mapc #'delete-surprises ports)
     (mapc #'h:stop acceptors)))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Core
+
+;; Assures that all EXPECT blocks and all request handlers don't conflict.
+(defvar *expectations-lock* (bt:make-lock "The Great Rouclere expectations lock"))
+
+(defvar *port*)
+
 (defmacro with-wand-pointed-at ((port-var) &body body)
   `(let ((*port* ,port-var)) ,@body))
 
@@ -133,13 +127,6 @@
       `(flet ((,thunk (,@port-vars) (declare (ignorable ,@(rest port-vars)))
                 (with-wand-pointed-at (,(first port-vars)) ,@body)))
          (call-with-magic-show #',thunk ,(length port-vars) ,on-letdowns ,on-surprises)))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Expectation building
-
-;;; Held EITHER around the whole EXPECT OR around a whole
-;;; ACCEPTOR-DISPATCH-REQUEST. The two blocks must execute separately.
-(defvar *expectations-lock* (bt:make-lock "The Great Rouclere expectations lock"))
 
 (defvar *expectation*)
 
@@ -196,12 +183,7 @@
       expectation))
   (:method ((key (eql :content-type)) data expectation)
     (destructuring-bind (value) data
-      (a:when-let ((actual (a:assoc-value (getf expectation :headers) "Content-Type"
-                                          :test #'equal)))
-        (error "The Great Rouclere will already respond with header ~S as ~S!"
-               "Content-Type" actual))
-      (push (cons "Content-Type" value) (getf expectation :headers))
-      expectation))
+      (add-to-answer :header (list "Content-Type" value) expectation)))
   (:method ((key (eql :body)) data expectation)
     (destructuring-bind (value) data
       (a:when-let ((actual (getf expectation :body)))
