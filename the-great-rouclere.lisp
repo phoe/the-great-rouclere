@@ -4,7 +4,8 @@
                     (#:h #:hunchentoot)
                     (#:s #:split-sequence))
   (:export  #:+http-magic-is-gone+
-            #:with-magic-show #:with-wand-pointed-at #:expect #:answer #:with
+            #:with-magic-show #:with-wand-pointed-at
+            #:expect #:answer #:with #:var
             #:expectations #:surprises))
 
 (in-package #:the-great-rouclere)
@@ -73,7 +74,8 @@
         nconc (loop for surprise in (surprises port)
                     collect (list* port surprise))
           into surprises
-        nconc (loop for letdown in (remove t (expectations port) :key (lambda (x) (getf x :times)))
+        nconc (loop for letdown in (remove t (expectations port)
+                                           :key (a:rcurry #'getf :times))
                     collect (list* :port port letdown))
           into letdowns
         finally (return (values surprises letdowns))))
@@ -148,9 +150,14 @@
   (:method ((key (eql :basic-authorization)) data expectation)
     (destructuring-bind (username password) data
       (let ((value (base64-encode (format nil "~A:~A" username password))))
-        (add-to-expectation :header (list "Authorization" (format nil "Basic ~A" value)) expectation))))
+        (add-to-expectation :header (list "Authorization" (format nil "Basic ~A" value))
+                            expectation))))
   (:method ((key (eql :accept)) data expectation)
     (add-to-expectation :header (cons "Accept" data) expectation))
+  (:method ((key (eql :predicate)) data expectation)
+    (destructuring-bind (function) data
+      (push function (getf expectation :predicates))
+      expectation))
   (:method ((key (eql :body)) data expectation)
     (destructuring-bind (value) data
       (a:when-let ((actual (getf expectation :body)))
@@ -169,6 +176,10 @@
   (:method ((key (eql :content-type)) data expectation)
     (destructuring-bind (value) data
       (add-to-answer :header (list "Content-Type" value) expectation)))
+  (:method ((key (eql :side-effects)) data expectation)
+    (destructuring-bind (function) data
+      (push function (getf expectation :side-effects))
+      expectation))
   (:method ((key (eql :body)) data expectation)
     (destructuring-bind (value) data
       (a:when-let ((actual (getf expectation :body)))
@@ -185,6 +196,37 @@
           (error "The Great Rouclere has no context of the WITH!"))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Extracting URL portions
+
+(defun var (name &optional (template (getf *expectation* :url)) (script (h:script-name*)))
+  (let ((template (s:split-sequence #\/ template))
+        (script (s:split-sequence #\/ script))
+        (indicator (format nil ":~A" name)))
+    (a:if-let ((position (position indicator template :test #'equalp)))
+      (nth position script)
+      (error "The Great Rouclere is not aware of a variable named :~(~A~)!" name))))
+
+(defun check-duplicate-variables (template)
+  (loop with hash-table = (make-hash-table :test #'equal)
+        for fragment in template
+        for variablep = (eql 0 (position #\: fragment))
+        do (cond ((null variablep))
+                 ((gethash fragment hash-table)
+                  (error "The Great Rouclere has found duplicate variable ~S!" fragment))
+                 (t
+                  (setf (gethash fragment hash-table) t))) ))
+
+(defun url-match (&optional (template (getf *expectation* :url)) (script (h:script-name*)))
+  (let ((template (s:split-sequence #\/ template))
+        (script (s:split-sequence #\/ script)))
+    (check-duplicate-variables template)
+    (and (= (length template) (length script))
+         (loop for template-fragment in template
+               for script-fragment in script
+               always (or (eql 0 (position #\: template-fragment))
+                          (string= template-fragment script-fragment))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Expectation matching
 
 (defgeneric match (key value request)
@@ -193,12 +235,14 @@
   (:method ((key (eql :method)) value request)
     (eq value (h:request-method request)))
   (:method ((key (eql :url)) value request)
-    (string= value (h:request-uri request)))
+    (url-match value (h:script-name request)))
   (:method ((key (eql :body)) value request)
     (string= value (h:raw-post-data :request request :external-format :utf-8)))
   (:method ((key (eql :headers)) value request)
     (loop for (expected-header . expected-value) in value
           always (string= expected-value (h:header-in expected-header request))))
+  (:method ((key (eql :predicates)) value request)
+    (every #'funcall value))
   (:method ((key (eql :times)) value request)
     ;; Virtual match, handled in ACCEPTOR-DISPATCH-REQUEST.
     t)
@@ -225,6 +269,8 @@
   (:method ((key (eql :headers)) value request)
     (loop for (expected-header . expected-value) in value
           do (setf (h:header-out expected-header) expected-value)))
+  (:method ((key (eql :side-effects)) value request)
+    (mapc #'funcall value))
   (:method ((key (eql :body)) value request)
     ;; Virtual call, handled in CREATE-ANSWER.
     ))
@@ -263,6 +309,7 @@
                                        stream)))))
       (bt:with-lock-held (*expectations-lock*)
         (loop for expectation in (expectations port)
+              for *expectation* = expectation
               for match = (match-expectation request expectation)
               when match
                 do (cond ((eq t (getf expectation :times)))

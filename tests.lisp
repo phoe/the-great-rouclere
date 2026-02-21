@@ -175,3 +175,16 @@
         (apply #'test set-2)
         (apply #'test set-3)
         (apply #'test set-1)))))
+
+(5am:test variables-predicates-side-effects
+  (let (result)
+    (r:with-magic-show (port :on-letdowns #'fail :on-surprises #'fail)
+      (r:expect (:get "/foo/:bar/baz/:quux/:frob")
+        (r:with :predicate (lambda () (string= "123" (r:var "bar"))))
+        (r:answer (h:+http-ok+)
+          (r:with :side-effects
+            (lambda () (setf result (list (r:var "quux") (r:var "frob")))))))
+      (let* ((url (format nil "http://localhost:~D/foo/123/baz/456/789" port))
+             (status (nth-value 1 (d:http-request url))))
+        (5am:is (= h:+http-ok+ status))
+        (5am:is (equal '("456" "789") result))))))
