@@ -5,9 +5,9 @@
                     (#:m #:closer-mop)
                     (#:s #:split-sequence))
   (:export #:+http-expectation-unmet+
+           #:expectations #:surprises #:*failure-stream*
            #:with-magic-show #:with-wand-pointed-at
-           #:expect #:answer #:with #:var
-           #:expectations #:surprises))
+           #:expect #:answer #:with #:var))
 
 (in-package #:the-great-rouclere)
 
@@ -49,8 +49,10 @@
 (defun (setf surprises) (newval port) (setf (gethash port *surprises*) newval))
 (defun delete-surprises (port) (remhash port *surprises*))
 
-(defun report-magic-failures (failures on-failure report-string &optional (stream *debug-io*))
-  (when failures
+(defvar *failure-stream* *debug-io*)
+
+(defun report-magic-failures (failures on-failure report-string &optional (stream *failure-stream*))
+  (when (and failures stream)
     (when on-failure (funcall on-failure failures))
     (when report-string
       (format stream "~&;; ")

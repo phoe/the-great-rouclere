@@ -141,7 +141,7 @@
                (5am:is (eq :get (getf expectation :method)))
                (5am:is (= 1 (getf expectation :times)))
                (5am:is (equal "/nowhere" (getf expectation :url))))))
-      (let ((string (with-output-to-string (*debug-io*)
+      (let ((string (with-output-to-string (r:*failure-stream*)
                       (r:with-magic-show (port :on-letdowns #'on-letdowns :on-surprises #'fail)
                         (r:expect (:get "/nowhere"))))))
         (5am:is-true flag)
@@ -160,7 +160,7 @@
                (5am:is (string= "Surprise!!!1" (h:raw-post-data :request request
                                                                 :external-format :utf-8)))
                (5am:is (null expectations)))))
-      (let ((string (with-output-to-string (*debug-io*)
+      (let ((string (with-output-to-string (r:*failure-stream*)
                       (r:with-magic-show (port :on-surprises #'on-surprises :on-letdowns #'fail)
                         (setf expected-port port)
                         (let* ((url (make-url port "/nowhere")))
