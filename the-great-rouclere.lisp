@@ -1,7 +1,8 @@
 (uiop:define-package #:the-great-rouclere
-  (:use #:cl)
+    (:use #:cl)
   (:local-nicknames (#:a #:alexandria-2)
                     (#:h #:hunchentoot)
+                    (#:m #:closer-mop)
                     (#:s #:split-sequence))
   (:export  #:+http-magic-is-gone+
             #:with-magic-show #:with-wand-pointed-at
@@ -180,13 +181,26 @@
       (setf (getf answer :body) value)
       answer)))
 
+(defun check-meaningful (key)
+  (let* ((methods (append (m:generic-function-methods #'add-to-answer)
+                          (m:generic-function-methods #'add-to-expectation)))
+         (keywords (mapcar (a:compose #'m:eql-specializer-object
+                                      #'first
+                                      #'m:method-specializers)
+                           methods)))
+    (unless (member key keywords)
+      (error "The Great Rouclere does not recognize the WITH keyword ~S!~%(Only ~{~S~^, ~}.)"
+             key keywords))))
+
 (defmacro with (key &rest data)
-  `(cond ((boundp '*answer*)
-          (setf *answer* (add-to-answer ,key (list ,@data) *answer*)))
-         ((boundp '*expectation*)
-          (setf *expectation* (add-to-expectation ,key (list ,@data) *expectation*)))
-         (t
-          (error "The Great Rouclere has no context of the WITH!"))))
+  `(progn
+     (check-meaningful ,key)
+     (cond ((boundp '*answer*)
+            (setf *answer* (add-to-answer ,key (list ,@data) *answer*)))
+           ((boundp '*expectation*)
+            (setf *expectation* (add-to-expectation ,key (list ,@data) *expectation*)))
+           (t
+            (error "The Great Rouclere has no context of the WITH!")))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Extracting URL portions

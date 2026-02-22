@@ -28,6 +28,21 @@
 (defun make-url (port script)
   (format nil "http://localhost:~A~A" port script))
 
+(defmacro signals* (report &body body)
+  (a:with-gensyms (condition block)
+    (a:once-only (report)
+      `(block ,block
+         (handler-bind ((condition (lambda (,condition)
+                                     (when (eql 0 (search ,report (princ-to-string ,condition)))
+                                       (5am:pass)
+                                       (return-from ,block nil)))))
+           ,@body)
+         (5am:fail "Condition with report ~S not signaled." ,report)))))
+
+(defmacro without-expectations ((port-var) &body body)
+  `(unwind-protect (progn ,@body)
+     (setf (r:expectations ,port-var) nil)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Tests
 
@@ -269,45 +284,35 @@
       (test)
       (test))))
 
-(defmacro signals* (report &body body)
-  (a:with-gensyms (condition block)
-    (a:once-only (report)
-      `(block ,block
-         (handler-bind ((condition (lambda (,condition)
-                                     (when (eql 0 (search ,report (princ-to-string ,condition)))
-                                       (5am:pass)
-                                       (return-from ,block nil)))))
-           ,@body)
-         (5am:fail "Condition with report ~S not signaled." ,report)))))
-
 (5am:test errors
-  (macrolet ((without-expectations ((port-var) &body body)
-               `(unwind-protect (progn ,@body)
-                  (setf (r:expectations ,port-var) nil))))
-    (r:with-magic-show (port :on-letdowns #'fail :on-surprises #'fail)
-      (without-expectations (port)
-        (r:expect (:get "/")
+  (r:with-magic-show (port :on-letdowns #'fail :on-surprises #'fail)
+    (without-expectations (port)
+      (r:expect (:get "/")
+        (r:with :header "Foo" "Bar")
+        (signals* "The Great Rouclere will already expect header \"Foo\" as \"Bar\"!"
+          (r:with :header "Foo" "Baz"))))
+    (without-expectations (port)
+      (r:expect (:get "/")
+        (r:answer (h:+http-ok+)
           (r:with :header "Foo" "Bar")
-          (signals* "The Great Rouclere will already expect header \"Foo\" as \"Bar\"!"
-            (r:with :header "Foo" "Baz"))))
-      (without-expectations (port)
-        (r:expect (:get "/")
-          (r:answer (h:+http-ok+)
-            (r:with :header "Foo" "Bar")
-            (signals* "The Great Rouclere will already respond with header \"Foo\" as \"Bar\"!"
-              (r:with :header "Foo" "Baz")))))
-      (without-expectations (port)
-        (r:expect (:post "/")
+          (signals* "The Great Rouclere will already respond with header \"Foo\" as \"Bar\"!"
+            (r:with :header "Foo" "Baz")))))
+    (without-expectations (port)
+      (r:expect (:post "/")
+        (r:with :body "body")
+        (signals* "The Great Rouclere will already expect body \"body\"!"
+          (r:with :body "nobody"))))
+    (without-expectations (port)
+      (r:expect (:get "/")
+        (r:answer (h:+http-ok+)
           (r:with :body "body")
-          (signals* "The Great Rouclere will already expect body \"body\"!"
-            (r:with :body "nobody"))))
-      (without-expectations (port)
-        (r:expect (:get "/")
-          (r:answer (h:+http-ok+)
-            (r:with :body "body")
-            (signals* "The Great Rouclere will already respond with body \"body\"!"
-              (r:with :body "nobody")))))
-      (signals* "The Great Rouclere is not aware of a variable named :foo!"
-        (r:var "foo" "/" "/"))
-      (signals* "The Great Rouclere has found duplicate variable \":foo\"!"
-        (r:var "foo" "/:foo/:foo" "/123/456")))))
+          (signals* "The Great Rouclere will already respond with body \"body\"!"
+            (r:with :body "nobody")))))
+    (without-expectations (port)
+      (r:expect (:get "/")
+        (signals* "The Great Rouclere does not recognize the WITH keyword UNKNOWN-KEYWORD!"
+          (r:with 'unknown-keyword))))
+    (signals* "The Great Rouclere is not aware of a variable named :foo!"
+      (r:var "foo" "/" "/"))
+    (signals* "The Great Rouclere has found duplicate variable \":foo\"!"
+      (r:var "foo" "/:foo/:foo" "/123/456"))))

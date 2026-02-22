@@ -4,7 +4,8 @@
   :license "MIT"
   :depends-on (#:alexandria
                #:bordeaux-threads
-               #:hunchentoot)
+               #:hunchentoot
+               #:closer-mop)
   :serial t
   :components ((:file "the-great-rouclere"))
   :in-order-to ((test-op (test-op #:the-great-rouclere/tests))))
