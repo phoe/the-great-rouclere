@@ -13,16 +13,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Utilities
 
-(defun octets-to-string (octets)
-  (babel:octets-to-string octets :encoding (babel:make-external-format :utf-8)))
-
-(defun base64-decode (string)
-  (octets-to-string (base64:base64-stream-to-usb8-array string)))
-
-(defun base64-encode (string)
-  (base64:usb8-array-to-base64-string
-   (babel:string-to-octets string :encoding (babel:make-external-format :utf-8))))
-
 ;;; We claim HTTP status code 555 to denote an expectation failure.
 (h::def-http-return-code +http-magic-is-gone+ 555 "Magic Is Gone")
 
@@ -142,16 +132,19 @@
 (defgeneric add-to-expectation (key data expectation)
   (:method ((key (eql :header)) data expectation)
     (destructuring-bind (header value) data
-      (a:when-let ((actual (a:assoc-value (getf expectation :headers) key :test #'equal)))
+      (a:when-let ((actual (a:assoc-value (getf expectation :headers) header :test #'equal)))
         (error "The Great Rouclere will already expect header ~S as ~S!"
-               key actual))
+               header actual))
       (push (cons header value) (getf expectation :headers))
       expectation))
   (:method ((key (eql :basic-authorization)) data expectation)
     (destructuring-bind (username password) data
-      (let ((value (base64-encode (format nil "~A:~A" username password))))
-        (add-to-expectation :header (list "Authorization" (format nil "Basic ~A" value))
-                            expectation))))
+      (flet ((base64-encode (string)
+               (base64:usb8-array-to-base64-string
+                (babel:string-to-octets string :encoding (babel:make-external-format :utf-8)))))
+        (let ((value (base64-encode (format nil "~A:~A" username password))))
+          (add-to-expectation :header (list "Authorization" (format nil "Basic ~A" value))
+                              expectation)))))
   (:method ((key (eql :accept)) data expectation)
     (add-to-expectation :header (cons "Accept" data) expectation))
   (:method ((key (eql :predicate)) data expectation)
@@ -168,9 +161,9 @@
 (defgeneric add-to-answer (key data answer)
   (:method ((key (eql :header)) data answer)
     (destructuring-bind (header value) data
-      (a:when-let ((actual (a:assoc-value (getf answer :headers) key :test #'equal)))
+      (a:when-let ((actual (a:assoc-value (getf answer :headers) header :test #'equal)))
         (error "The Great Rouclere will already respond with header ~S as ~S!"
-               key actual))
+               header actual))
       (push (cons header value) (getf answer :headers))
       answer))
   (:method ((key (eql :content-type)) data answer)
@@ -198,14 +191,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Extracting URL portions
 
-(defun var (name &optional (template (getf *expectation* :url)) (script (h:script-name*)))
-  (let ((template (s:split-sequence #\/ template))
-        (script (s:split-sequence #\/ script))
-        (indicator (format nil ":~A" name)))
-    (a:if-let ((position (position indicator template :test #'equalp)))
-      (nth position script)
-      (error "The Great Rouclere is not aware of a variable named :~(~A~)!" name))))
-
 (defun check-duplicate-variables (template)
   (loop with hash-table = (make-hash-table :test #'equal)
         for fragment in template
@@ -216,7 +201,16 @@
                  (t
                   (setf (gethash fragment hash-table) t))) ))
 
-(defun url-match (&optional (template (getf *expectation* :url)) (script (h:script-name*)))
+(defun var (name &optional (template (getf *expectation* :url)) (script (h:script-name*)))
+  (let ((template (s:split-sequence #\/ template))
+        (script (s:split-sequence #\/ script))
+        (indicator (format nil ":~A" name)))
+    (check-duplicate-variables template)
+    (a:if-let ((position (position indicator template :test #'equalp)))
+      (nth position script)
+      (error "The Great Rouclere is not aware of a variable named :~(~A~)!" name))))
+
+(defun url-match (template script)
   (let ((template (s:split-sequence #\/ template))
         (script (s:split-sequence #\/ script)))
     (check-duplicate-variables template)
@@ -230,18 +224,15 @@
 ;;; Expectation matching
 
 (defgeneric match (key value request)
-  ;; TODO ignore the request everywhere, use star variants of functions
-  (:method :around (key (value function) request)
-    (call-next-method key (funcall value request) request))
   (:method ((key (eql :method)) value request)
-    (eq value (h:request-method request)))
+    (eq value (h:request-method*)))
   (:method ((key (eql :url)) value request)
-    (url-match value (h:script-name request)))
+    (url-match value (h:script-name*)))
   (:method ((key (eql :body)) value request)
     (string= value (h:raw-post-data :request request :external-format :utf-8)))
   (:method ((key (eql :headers)) value request)
     (loop for (expected-header . expected-value) in value
-          always (string= expected-value (h:header-in expected-header request))))
+          always (string= expected-value (h:header-in* expected-header))))
   (:method ((key (eql :predicates)) value request)
     (every #'funcall value))
   (:method ((key (eql :times)) value request)
@@ -263,8 +254,6 @@
 ;;; Answer construction
 
 (defgeneric respond (key value request)
-  (:method :around (key (value function) request)
-    (call-next-method key (funcall value request) request))
   (:method ((key (eql :code)) value request)
     (setf (h:return-code*) value))
   (:method ((key (eql :headers)) value request)
@@ -287,10 +276,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Handling HTTP requests
 
-(defun unmake-request (request stream &optional data)
-  (format stream "~A ~A ~A~%"
-          (h:request-method request) (h:request-uri request) (h:server-protocol request))
-  (loop for (key . value) in (h:headers-in request) do
+(defun unmake-request (stream &optional data)
+  (format stream "~A ~A ~A~%" (h:request-method*) (h:request-uri*) (h:server-protocol*))
+  (loop for (key . value) in (h:headers-in*) do
     (format stream "~:(~A~): ~A~%" key value))
   (terpri stream)
   (when data (format stream "~A~%~%" data)))
@@ -304,7 +292,7 @@
              (h:abort-request-handler
               (with-output-to-string (stream)
                 (format stream ";; The Great Rouclere is surprised by this request!~%~%")
-                (unmake-request request stream (h:raw-post-data :external-format :utf-8))
+                (unmake-request stream (h:raw-post-data :external-format :utf-8))
                 (report-magic-failures (expectations port) nil
                                        "The Great Rouclere has had ~D expectations at the time."
                                        stream)))))
@@ -314,9 +302,8 @@
               for match = (match-expectation request expectation)
               when match
                 do (cond ((eq t (getf expectation :times)))
-                         ((plusp (getf expectation :times))
-                          (when (= 0 (decf (getf expectation :times)))
-                            (a:deletef (expectations port) expectation :count 1))))
+                         ((= 0 (decf (getf expectation :times)))
+                          (a:deletef (expectations port) expectation :count 1)))
                    (return (when (consp match)
                              (create-answer request match)))
               finally (fail))))))
