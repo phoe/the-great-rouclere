@@ -19,4 +19,6 @@
                #:the-great-rouclere)
   :serial t
   :components ((:file "tests"))
-  :perform (test-op (o s) (uiop:symbol-call '#:the-great-rouclere/tests '#:magic!)))
+  :perform (test-op (o s) (uiop:symbol-call '#:fiveam '#:run!
+                                            (uiop:find-symbol* '#:the-great-rouclere
+                                                               '#:the-great-rouclere/tests))))

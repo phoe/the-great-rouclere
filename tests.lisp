@@ -4,7 +4,7 @@
                     (#:d #:drakma)
                     (#:h #:hunchentoot)
                     (#:r #:the-great-rouclere))
-  (:export #:*debugp* #:magic!))
+  (:export #:the-great-rouclere))
 
 (in-package #:the-great-rouclere/tests)
 
@@ -14,13 +14,6 @@
 (5am:def-suite the-great-rouclere)
 
 (5am:in-suite the-great-rouclere)
-
-(defvar *debugp* nil)
-
-(defun magic! (&optional (debugp *debugp*))
-  (let ((5am:*on-error* (if debugp :debug nil))
-        (5am:*on-failure* (if debugp :debug nil)))
-    (5am:run! 'the-great-rouclere)))
 
 (defun fail (&rest args)
   (5am:fail "Test failure: ~S" args))
