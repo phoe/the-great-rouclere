@@ -1,13 +1,13 @@
 (uiop:define-package #:the-great-rouclere
-    (:use #:cl)
+  (:use #:cl)
   (:local-nicknames (#:a #:alexandria-2)
                     (#:h #:hunchentoot)
                     (#:m #:closer-mop)
                     (#:s #:split-sequence))
-  (:export  #:+http-expectation-unmet+
-            #:with-magic-show #:with-wand-pointed-at
-            #:expect #:answer #:with #:var
-            #:expectations #:surprises))
+  (:export #:+http-expectation-unmet+
+           #:with-magic-show #:with-wand-pointed-at
+           #:expect #:answer #:with #:var
+           #:expectations #:surprises))
 
 (in-package #:the-great-rouclere)
 
@@ -321,3 +321,4 @@
                    (return (when (consp match)
                              (create-answer request match)))
               finally (fail))))))
+
