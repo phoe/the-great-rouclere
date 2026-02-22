@@ -4,7 +4,7 @@
                     (#:h #:hunchentoot)
                     (#:m #:closer-mop)
                     (#:s #:split-sequence))
-  (:export  #:+http-magic-is-gone+
+  (:export  #:+http-expectation-unmet+
             #:with-magic-show #:with-wand-pointed-at
             #:expect #:answer #:with #:var
             #:expectations #:surprises))
@@ -14,8 +14,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Utilities
 
-;;; We claim HTTP status code 555 to denote an expectation failure.
-(h::def-http-return-code +http-magic-is-gone+ 555 "Magic Is Gone")
+;;; We claim HTTP status code 444 to denote a surprise.
+(h::def-http-return-code +http-expectation-unmet+ 444 "Expectation Unmet")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Acceptor
@@ -301,7 +301,7 @@
   (let ((port (h:acceptor-port acceptor)))
     (flet ((fail ()
              (push (list request (copy-tree (expectations port))) (surprises port))
-             (setf (h:return-code*) 555
+             (setf (h:return-code*) +http-expectation-unmet+
                    (h:content-type*) "text/plain")
              (h:abort-request-handler
               (with-output-to-string (stream)
