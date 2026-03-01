@@ -4,7 +4,7 @@
                     (#:h #:hunchentoot)
                     (#:m #:closer-mop)
                     (#:s #:split-sequence))
-  (:export #:+http-expectation-unmet+
+  (:export #:+http-unexpected-request+
            #:expectations #:surprises #:*failure-stream*
            #:with-magic-show #:with-wand-pointed-at
            #:expect #:answer #:with #:var))
@@ -15,7 +15,7 @@
 ;;; Utilities
 
 ;;; We claim HTTP status code 444 to denote a surprise.
-(h::def-http-return-code +http-expectation-unmet+ 444 "Expectation Unmet")
+(h::def-http-return-code +http-unexpected-request+ 444 "Unexpected Request")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Acceptor
@@ -303,7 +303,7 @@
   (let ((port (h:acceptor-port acceptor)))
     (flet ((fail ()
              (push (list request (copy-tree (expectations port))) (surprises port))
-             (setf (h:return-code*) +http-expectation-unmet+
+             (setf (h:return-code*) +http-unexpected-request+
                    (h:content-type*) "text/plain")
              (h:abort-request-handler
               (with-output-to-string (stream)
