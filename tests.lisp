@@ -30,11 +30,11 @@
                                        (5am:pass)
                                        (return-from ,block nil)))))
            ,@body)
-         (5am:fail "Condition with report ~S not signaled." ,report)))))
+         (5am:fail "The Great Rouclere did not signal the expected condition ~S!" ,report)))))
 
 (defmacro without-expectations ((port-var) &body body)
   `(unwind-protect (progn ,@body)
-     (setf (r:expectations ,port-var) nil)))
+     (r:delete-expectations ,port-var)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Tests
@@ -219,10 +219,11 @@
         (apply #'test set-1)))))
 
 (5am:test variables-predicates-side-effects
-  (let (result-1 result-2)
+  (let (result-0 result-1 result-2)
     (r:with-magic-show (port :on-letdowns #'fail :on-surprises #'fail)
       (r:expect (:get "/foo/:bar/baz/:quux/:frob")
         (r:with :predicate (lambda () (string= "123" (r:var "bar"))))
+        (r:with :side-effects (lambda () (setf result-0 (r:var "bar"))))
         (r:answer (h:+http-ok+)
           (r:with :side-effects
                   (lambda () (setf result-1 (list (r:var "quux") (r:var "frob")))))
@@ -236,6 +237,7 @@
         (multiple-value-bind (body status) (d:http-request url)
           (5am:is (string= "123456789" body))
           (5am:is (= h:+http-ok+ status))
+          (5am:is (equal "123" result-0))
           (5am:is (equal '("456" "789") result-1))
           (5am:is (equal "123" result-2)))))))
 
@@ -284,6 +286,31 @@
       (test)
       (test))))
 
+(5am:test functions-everywhere
+  (let ((readyp nil))
+    (flet ((when-ready (x) (lambda () (if readyp x (error "Too early!")))))
+      (r:with-magic-show (port :on-letdowns #'fail :on-surprises #'fail)
+        (r:expect ((when-ready :put) (when-ready "/functions"))
+          (r:with :body (when-ready "Test body"))
+          (r:with :header "Test-Header" (when-ready "Test-Value"))
+          (r:with :basic-authorization (when-ready (list "User" "Password")))
+          (r:with :accept (when-ready "application/of-oil-to-snake"))
+          (r:answer ((when-ready h:+http-ok+))
+            (r:with :header "Test-Header" (when-ready "Test-Value-2"))
+            (r:with :body (when-ready "Test response body"))))
+        (setf readyp t)
+        (multiple-value-bind (body status-code headers)
+            (d:http-request (make-url port "/functions")
+                            :method :put
+                            :content "Test body"
+                            :additional-headers '(("Test-Header" . "Test-Value"))
+                            :basic-authorization '("User" "Password")
+                            :accept "application/of-oil-to-snake")
+          (5am:is (string= body "Test response body"))
+          (5am:is (= status-code h:+http-ok+))
+          (let ((header (a:assoc-value headers "Test-Header" :test #'string-equal)))
+            (5am:is (string= header "Test-Value-2"))))))))
+
 (5am:test errors
   (r:with-magic-show (port :on-letdowns #'fail :on-surprises #'fail)
     (without-expectations (port)
@@ -310,7 +337,8 @@
             (r:with :body "nobody")))))
     (without-expectations (port)
       (r:expect (:get "/")
-        (signals* "The Great Rouclere does not recognize the WITH keyword UNKNOWN-KEYWORD!"
+        (signals* (format nil "The Great Rouclere does not recognize ~
+                               the WITH keyword THE-GREAT-ROUCLERE/TESTS::UNKNOWN-KEYWORD!")
           (r:with 'unknown-keyword))))
     (signals* "The Great Rouclere is not aware of a variable named :foo!"
       (r:var "foo" "/" "/"))

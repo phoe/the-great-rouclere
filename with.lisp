@@ -11,8 +11,9 @@
                                       #'m:method-specializers)
                            methods)))
     (unless (member key keywords)
-      (error "The Great Rouclere does not recognize the WITH keyword ~S!~%(Only ~{~S~^, ~}.)"
-             key keywords))))
+      (let ((*package* (find-package :keyword)))
+        (error "The Great Rouclere does not recognize the WITH keyword ~S!~%(Only ~{~S~^, ~}.)"
+               key keywords)))))
 
 (defmacro with (key &rest data)
   `(progn

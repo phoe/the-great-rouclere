@@ -5,6 +5,8 @@
                     (#:m #:closer-mop)
                     (#:s #:split-sequence))
   (:export #:+http-unexpected-request+
-           #:expectations #:surprises #:*failure-stream*
+           #:expectations #:delete-expectations
+           #:surprises #:delete-surprises
+           #:*failure-stream*
            #:with-magic-show #:with-wand-pointed-at
            #:expect #:answer #:with #:var))
