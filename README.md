@@ -1,10 +1,12 @@
 # The Great Rouclere!
 
-Welcome, welcome, gentlefolk of all kinds! Welcome to the show of The Great Rouclere, in which we shall attempt to meet your expectations, all of your expectations, only your expectations, nothing more, nothing less!
+Welcome, welcome, gentlefolk of all kinds!
+
+Welcome to the magic show of The Great Rouclere, in which we shall attempt to meet your expectations, all of your expectations, only your expectations, nothing more, nothing less!
 
 All over mostly-standard HTTP!
 
-Come, come! Watch the show of The Great Rouclere!
+Come, come! Watch the show of The Great Rouclere! Tell us what you expect and let The Great Rouclere not let your expectations down!
 
 ## Basics
 
@@ -23,11 +25,11 @@ The Great Rouclere is a programmable HTTP mock written in Common Lisp. It allows
   ...)
 ```
 
-This snippet starts a new *magic show* - a HTTP localhost server - and returns the port it's bound to as `port`.
+This snippet starts a new *magic show* - a HTTP localhost server - and allows the body to make use of the port the server is bound to, via variable `port` here.
 
 Then, The Great Rouclere proceeds to expect a single `POST` request of `/ping`, one that contains headers `Accept: application/magic-show` and `Magic-Dust: Imagination`, as well as `I would like one magic, please!` in the body.
 
-If such a request is made, The Great Rouclere fulfils the expectation by responding with a `HTTP 200` response, containing headers `Content-Type: text/magical` and `Magic-Dust: Prestidigitation`, as well as `That's perfect!!!` in the body.
+If such a request is made in the `...`, The Great Rouclere fulfils the expectation by responding with a `HTTP 200` response, containing headers `Content-Type: text/magical` and `Magic-Dust: Prestidigitation`, as well as `That's perfect!!!` in the body.
 
 If any other request comes in instead, The Great Rouclere responds with `HTTP 444` - a code that signifies a *surprise*, which is a request that did not match any expectation.
 
@@ -40,7 +42,8 @@ The Great Rouclere can do more than this:
 * create a magic show with multiple HTTP servers, with the possibility of setting expectations for each of them separately,
 * create expectations that can be triggered multiple times, including permanent expectations that never time out,
 * provide the current list of expectations and letdowns to user code as introspection,
-* call user-provides code for all surprises and letdowns at the end of the magic show,
+* call user-provided code for all surprises and letdowns at the end of the magic show,
+* defer computation of some values to when requests arrive by accepting zero-arg functions instead of literals in most places,
 * signal a variety of errors for ensuring expectation consistency.
 
 See [the test file](tests.lisp) for the capabilities of the current API.
