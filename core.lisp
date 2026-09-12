@@ -39,8 +39,10 @@
 
 (defvar *default-acceptor-class* 'magic-acceptor)
 
-(defun call-with-magic-show (thunk nports on-letdowns on-surprises)
-  (let ((acceptors (loop repeat nports collect (make-instance *default-acceptor-class* :port 0)))
+(defun call-with-magic-show (thunk nports on-letdowns on-surprises context)
+  (let ((acceptors (loop repeat nports collect (make-instance *default-acceptor-class*
+                                                              :port 0
+                                                              :context context)))
         ports)
     (unwind-protect
          (progn
@@ -61,9 +63,10 @@
 (defmacro with-wand-pointed-at ((port-var) &body body)
   `(let ((*port* ,port-var)) ,@body))
 
-(defmacro with-magic-show ((port-var-or-vars &key on-letdowns on-surprises) &body body)
+(defmacro with-magic-show ((port-var-or-vars &key on-letdowns on-surprises context) &body body)
   (let ((port-vars (a:ensure-list port-var-or-vars)))
     (a:with-gensyms (thunk)
       `(flet ((,thunk (,@port-vars) (declare (ignorable ,@(rest port-vars)))
                 (with-wand-pointed-at (,(first port-vars)) ,@body)))
-         (call-with-magic-show #',thunk ,(length port-vars) ,on-letdowns ,on-surprises)))))
+         (call-with-magic-show #',thunk ,(length port-vars)
+                               ,on-letdowns ,on-surprises (list ,@context))))))

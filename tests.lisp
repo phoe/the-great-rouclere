@@ -311,6 +311,21 @@
           (let ((header (a:assoc-value headers "Test-Header" :test #'string-equal)))
             (5am:is (string= header "Test-Value-2"))))))))
 
+(defvar *foo* nil)
+
+(defun with-foo (thunk)
+  (let ((*foo* t))
+    (funcall thunk)))
+
+(5am:test context
+  (r:with-magic-show (port :on-letdowns #'fail :on-surprises #'fail
+                           :context (#'with-foo))
+    (r:expect (:get "/")
+      (r:with :predicate (lambda () *foo*))
+      (r:answer (h:+http-ok+)))
+    (let ((status (nth-value 1 (d:http-request (make-url port "/")))))
+      (5am:is (= h:+http-ok+ status)))))
+
 (5am:test errors
   (r:with-magic-show (port :on-letdowns #'fail :on-surprises #'fail)
     (without-expectations (port)

@@ -6,7 +6,8 @@
 ;;; We claim HTTP status code 444 to denote a surprise.
 (h::def-http-return-code +http-unexpected-request+ 444 "Unexpected Request")
 
-(defclass magic-acceptor (h:acceptor) ())
+(defclass magic-acceptor (h:acceptor)
+  ((context :reader magic-acceptor-context :initarg :context :initform '())))
 
 (defmethod h:acceptor-log-access ((acceptor magic-acceptor) &key &allow-other-keys))
 
@@ -29,7 +30,7 @@
   (terpri stream)
   (when data (format stream "~A~%~%" data)))
 
-(defmethod h:acceptor-dispatch-request ((acceptor magic-acceptor) request)
+(defun magic-acceptor-dispatch-request (acceptor request)
   (let ((port (h:acceptor-port acceptor)))
     (flet ((fail ()
              (push (list request (copy-tree (expectations port))) (surprises port))
@@ -53,4 +54,17 @@
                    (return (when (consp match)
                              (create-answer request match)))
               finally (fail))))))
+
+(defun magic-acceptor-wrap-request (acceptor request context)
+  (destructuring-bind (wrapper . context) context
+    (flet ((wrapped-acceptor-function ()
+             (if (null context)
+                 (magic-acceptor-dispatch-request acceptor request)
+                 (magic-acceptor-wrap-request acceptor request context))))
+      (funcall wrapper #'wrapped-acceptor-function))))
+
+(defmethod h:acceptor-dispatch-request ((acceptor magic-acceptor) request)
+  (a:if-let ((context (magic-acceptor-context acceptor)))
+    (magic-acceptor-wrap-request acceptor request context)
+    (magic-acceptor-dispatch-request acceptor request)))
 
