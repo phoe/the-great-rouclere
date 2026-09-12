@@ -44,6 +44,7 @@ The Great Rouclere can do more than this:
 * provide the current list of expectations and letdowns to user code as introspection,
 * call user-provided code for all surprises and letdowns at the end of the magic show,
 * defer computation of some values to when requests arrive by accepting zero-arg functions instead of literals in most places,
+* accept context in form of a list of one-argument functions that accept a continuation and are called before each incoming request is handled,
 * signal a variety of errors for ensuring expectation consistency.
 
 See [the test file](tests.lisp) for the capabilities of the current API.
