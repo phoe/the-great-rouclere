@@ -9,4 +9,5 @@
            #:surprises #:delete-surprises
            #:*failure-stream*
            #:with-magic-show #:with-wand-pointed-at
+           #:*default-expectation-count*
            #:expect #:answer #:with #:var))

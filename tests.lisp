@@ -198,6 +198,23 @@
         (5am:is (= 1 (length (r:expectations port)))))
       (5am:is (null flag)))))
 
+(5am:test permanent-default-expectations
+  (let ((flag nil)
+        (r:*default-expectation-count* t))
+    (flet ((on-letdowns (expectations)
+             (declare (ignore expectations))
+             (setf flag t)))
+      (r:with-magic-show (port :on-letdowns #'on-letdowns :on-surprises #'fail)
+        (r:expect (:get "/always")
+          (r:answer (h:+http-accepted+)))
+        (5am:is (= 1 (length (r:expectations port))))
+        (5am:is (loop with url = (make-url port "/always")
+                      repeat 100
+                      for status-code = (nth-value 1 (d:http-request url))
+                      always (= status-code h:+http-accepted+)))
+        (5am:is (= 1 (length (r:expectations port)))))
+      (5am:is (null flag)))))
+
 (5am:test multimagic
   (r:with-magic-show ((port-1 port-2 port-3) :on-letdowns #'fail :on-surprises #'fail)
     (flet ((spell (port url code)

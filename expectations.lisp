@@ -9,11 +9,15 @@
 
 (defvar *expectation*)
 
-(defmacro expect ((method url &key (times 1)) &body body)
+(defparameter *default-expectation-count* 1
+  "The default count of expectations. Should be a positive integer or T.")
+
+(defmacro expect ((method url &key times) &body body)
   `(if (boundp '*expectation*)
        (error "The Great Rouclere is already listening to your expectation! ~S"
               *expectation*)
-       (let ((*expectation* (list :method ,method :url ,url :times ,times)))
+       (let ((*expectation* (list :method ,method :url ,url
+                                  :times ,(or times '*default-expectation-count*))))
          (bt:with-lock-held (*expectations-lock*)
            (multiple-value-prog1 ,@body
              (a:nconcf (expectations *port*) (list *expectation*)))))))
